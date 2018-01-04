@@ -7,10 +7,10 @@ from scrapyspider.items import GithubUserItem
 
 class GithubUserSpider(Spider):
     name = 'github_user'
-    header = 'https://github.com/'
+    host = 'https://github.com/'
     
     def start_requests(self):
-        url = self.header + "HUSTSWH"
+        url = self.host + "HUSTSWH"
         yield Request(url, callback=self.parse_overview)
 
     def parse_overview(self, response):
@@ -21,43 +21,56 @@ class GithubUserSpider(Spider):
         item['organization'] = card.xpath('//span[@class="p-org"]/div/text()').extract_first()
         item['url'] = card.xpath('//a[@class="u-url"]/text()').extract_first()
 
-        url = self.header + item['username'] + '?tab=repositories'
+        # convey current fields to next page
+        url = self.host + item['username'] + '?tab=repositories'
         request =  Request(url, callback=self.parse_repo, priority=100)
         request.meta['item'] = item
         yield request
 
     def parse_repo(self, response):
+        # get item with fields from previous page
         item = response.meta['item']
-        repos = [s.strip() for s in response.xpath('//a[@itemprop="name codeRepository"]/text()').extract()]
-        item['repos'] = str(repos)
+# repos = [{"name": s.strip()} for s in response.xpath('//a[@itemprop="name codeRepository"]/text()').extract()]
+# item['repos'] = repos
+        repos = response.xpath('//a[@itemprop="name codeRepository"]/text()').extract()
+        item['repos'] = [{"name": reponame.strip()} for reponame in repos]
 
-        url = self.header + item['username'] + '?tab=followers'
+        url = self.host + item['username'] + '?tab=followers'
         request = Request(url, callback=self.parse_followers, priority=200)
         request.meta['item'] = item
         yield request
 
     def parse_followers(self, response):
         item = response.meta['item']
-        users = [s[1:] for s in response.xpath('//a[@class="d-inline-block no-underline mb-1"]/@href').extract()]
-        item['followers'] = str(users)
+# users = [{"name": s[1:]} for s in response.xpath('//a[@class="d-inline-block no-underline mb-1"]/@href').extract()]
+# item['followers'] = users
+        users = response.xpath('//a[@class="d-inline-block no-underline mb-1"]/@href').extract()
+        # erase '/' in the front of name. '/HUSTSWH' -> 'HUSTSWH'
+        users = [user[1:] for user in users]
+        item['followers'] = [{"name": user} for user in users]
 
-        url = self.header + item['username'] + '?tab=following'
+        url = self.host + item['username'] + '?tab=following'
         request = Request(url, callback=self.parse_following, priority=300)
         request.meta['item'] = item
         yield request
 
+        # add homepage of followers to the query
         for next_user in users:
-            url = self.header + next_user
+            url = self.host + next_user
             yield Request(url, callback=self.parse_overview)
 
     def parse_following(self, response):
         item = response.meta['item']
-        users = [s[1:] for s in response.xpath('//a[@class="d-inline-block no-underline mb-1"]/@href').extract()]
-        item['following'] = str(users)
-
+# users = [{"name": s[1:]} for s in response.xpath('//a[@class="d-inline-block no-underline mb-1"]/@href').extract()]
+# item['following'] = users
+        users = response.xpath('//a[@class="d-inline-block no-underline mb-1"]/@href').extract()
+        users = [user[1:] for user in users]
+        item['following'] = [{"name": user} for user in users]
+        
+        # All fields crawled, return item to the engine.
         yield item
 
         for next_user in users:
-            url = self.header + next_user
+            url = self.host + next_user
             yield Request(url, callback=self.parse_overview)
 
