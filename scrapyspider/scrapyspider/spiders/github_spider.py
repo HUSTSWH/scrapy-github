@@ -30,8 +30,6 @@ class GithubUserSpider(Spider):
     def parse_repo(self, response):
         # get item with fields from previous page
         item = response.meta['item']
-# repos = [{"name": s.strip()} for s in response.xpath('//a[@itemprop="name codeRepository"]/text()').extract()]
-# item['repos'] = repos
         repos = response.xpath('//a[@itemprop="name codeRepository"]/text()').extract()
         item['repos'] = [{"name": reponame.strip()} for reponame in repos]
 
@@ -42,12 +40,10 @@ class GithubUserSpider(Spider):
 
     def parse_followers(self, response):
         item = response.meta['item']
-# users = [{"name": s[1:]} for s in response.xpath('//a[@class="d-inline-block no-underline mb-1"]/@href').extract()]
-# item['followers'] = users
         users = response.xpath('//a[@class="d-inline-block no-underline mb-1"]/@href').extract()
         # erase '/' in the front of name. '/HUSTSWH' -> 'HUSTSWH'
         users = [user[1:] for user in users]
-        item['followers'] = [{"name": user} for user in users]
+        item['followers'] = [{"username": user} for user in users]
 
         url = self.host + item['username'] + '?tab=following'
         request = Request(url, callback=self.parse_following, priority=300)
@@ -61,15 +57,14 @@ class GithubUserSpider(Spider):
 
     def parse_following(self, response):
         item = response.meta['item']
-# users = [{"name": s[1:]} for s in response.xpath('//a[@class="d-inline-block no-underline mb-1"]/@href').extract()]
-# item['following'] = users
         users = response.xpath('//a[@class="d-inline-block no-underline mb-1"]/@href').extract()
         users = [user[1:] for user in users]
-        item['following'] = [{"name": user} for user in users]
+        item['following'] = [{"username": user} for user in users]
         
         # All fields crawled, return item to the engine.
         yield item
 
+        # add homepage of following to the query
         for next_user in users:
             url = self.host + next_user
             yield Request(url, callback=self.parse_overview)
